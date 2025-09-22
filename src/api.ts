@@ -1,14 +1,19 @@
 // src/api.ts
 const API_BASE = '/api/fpl'
 
-export async function fetchBootstrap() {
-  const r = await fetch(`${API_BASE}/bootstrap-static`)
-  if (!r.ok) throw new Error('bootstrap fetch failed: ' + r.status)
+async function getJson(url: string) {
+  const r = await fetch(url, { cache: 'no-store' })
+  if (!r.ok) {
+    const text = await r.text().catch(() => '')
+    throw new Error(`HTTP ${r.status} ${r.statusText} :: ${text.slice(0, 180)}`)
+  }
   return r.json()
 }
 
-export async function fetchFixtures() {
-  const r = await fetch(`${API_BASE}/fixtures?future=1`)
-  if (!r.ok) throw new Error('fixtures fetch failed: ' + r.status)
-  return r.json()
+export function fetchBootstrap() {
+  return getJson(`${API_BASE}/bootstrap-static`)
+}
+
+export function fetchFixtures() {
+  return getJson(`${API_BASE}/fixtures?future=1`)
 }
