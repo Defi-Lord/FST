@@ -1,0 +1,328 @@
+:root{
+  --bg:#0b0c10;
+  --overlay:rgba(0,0,0,.45);
+  --glass: rgba(255,255,255,.06);
+  --glass-stroke: rgba(255,255,255,.08);
+  --text:#e8edf2;
+  --muted:#aab1bd;
+  --cta:#3CFF72;
+  --shadow: 0 10px 30px rgba(0,0,0,.45);
+}
+
+html,body,#root{height:100%}
+
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial,sans-serif
+}
+
+/* LAYOUT */
+.screen{
+  min-height:100%;
+  position:relative;
+  overflow-y:auto;                  /* allow scrolling */
+  -webkit-overflow-scrolling: touch;/* smooth on iOS */
+  display:flex;
+  flex-direction:column;
+}
+
+.bg{
+  position:absolute;
+  inset:0;
+  background:center/cover no-repeat;
+  filter:saturate(.9) contrast(1.05) brightness(.8)
+}
+.bg-landing{background-image:url('/bg-landing.jpg')}
+.bg-field{background-image:url('/bg-create.jpg')}
+.bg-leader{background-image:url('/bg-leaderboard.jpg')}
+.scrim{position:absolute;inset:0;background:var(--overlay)}
+
+.container{position:relative;z-index:1;padding:24px 18px 28px}
+.center{display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px}
+.safe-bottom{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+
+/* TYPOGRAPHY */
+.title-xxl{
+  font-size:34px;line-height:1.2;letter-spacing:.2px;
+  font-weight:900;text-align:center;
+  text-shadow:0 2px 12px rgba(0,0,0,.6)
+}
+.title-xl{font-size:28px;font-weight:900;letter-spacing:.2px;text-align:left}
+.headline{font-size:22px;line-height:1.35;font-weight:800;text-shadow:0 2px 12px rgba(0,0,0,.6)}
+.subtle{color:var(--muted);font-size:13px}
+
+/* GLASS + LIST */
+.list{display:flex;flex-direction:column;gap:12px;margin-top:16px}
+.card{
+  background:var(--glass);border:1px solid var(--glass-stroke);
+  border-radius:18px;padding:14px 16px;
+  backdrop-filter: blur(10px)
+}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.avatar{width:42px;height:42px;border-radius:10px;background:#7a8596;opacity:.6}
+.price{color:#d6ffe3}
+.pill-you{outline:2px solid rgba(60,255,114,.5)}
+
+/* CTA + UI bits */
+.cta{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  background:var(--cta);color:#001a07;font-weight:800;
+  padding:16px 22px;border-radius:999px;border:0;box-shadow:var(--shadow)
+}
+.bottom-actions{
+  position:fixed;left:0;right:0;bottom:0;
+  padding:10px 18px calc(24px + env(safe-area-inset-bottom));
+  background:linear-gradient(180deg,transparent,rgba(0,0,0,.6) 30%, rgba(0,0,0,.8));
+  z-index:5;
+}
+
+/* Progress */
+.progress{
+  height:6px;border-radius:999px;background:rgba(255,255,255,.2);
+  overflow:hidden;margin:12px 0 16px
+}
+.progress > span{display:block;height:100%;background:var(--cta)}
+
+/* Tab bar */
+.tabbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:6;
+  display:flex;align-items:flex-end;justify-content:space-around;
+  padding:8px 10px calc(10px + env(safe-area-inset-bottom));
+  height:80px;
+  background:rgba(8,8,10,.75);
+  backdrop-filter:saturate(1.2) blur(14px);
+  border-top:1px solid var(--glass-stroke);
+}
+.tab{
+  appearance:none;background:none;border:0;color:#cfd5df;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;padding:8px 10px;border-radius:12px;min-width:64px;
+  font-weight:800;font-size:12px;
+}
+.tab.active{
+  color:var(--text);
+  background:rgba(255,255,255,.06);
+  border:1px solid var(--glass-stroke)
+}
+.tab:active{transform:translateY(1px)}
+
+/* Chips / meta */
+.meta-row{display:flex;gap:10px;align-items:center;margin:8px 0 12px}
+.chip{
+  background:rgba(255,255,255,.08);border:1px solid var(--glass-stroke);
+  padding:8px 12px;border-radius:999px
+}
+
+/* Modal */
+.modal{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);
+  display:flex;align-items:center;justify-content:center;z-index:9
+}
+.modal-card{
+  width:min(420px,90vw);background:rgba(20,20,20,.95);
+  border:1px solid var(--glass-stroke);
+  border-radius:18px;padding:18px;box-shadow:var(--shadow)
+}
+
+/* Buttons */
+.btn-add,.btn-remove{
+  font-weight:800;border:0;border-radius:12px;
+  padding:8px 12px;cursor:pointer
+}
+.btn-add{background:var(--cta);color:#001a07}
+.btn-remove{
+  background:rgba(255,255,255,.1);color:var(--text);
+  border:1px solid var(--glass-stroke)
+}
+.btn-add:active,.btn-remove:active{transform:translateY(1px)}
+
+/* HomeHub extras */
+.balance-chip{
+  background:var(--glass);border:1px solid var(--glass-stroke);
+  padding:8px 12px;border-radius:14px;font-weight:800
+}
+.hero{
+  background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.06));
+  border:1px solid var(--glass-stroke);border-radius:18px;
+  padding:16px;box-shadow:var(--shadow)
+}
+.hero-tags{display:flex;gap:8px;margin-top:2px}
+.hero-tags > span{
+  background:rgba(255,255,255,.08);border:1px solid var(--glass-stroke);
+  border-radius:999px;padding:6px 10px;
+  font-weight:800;font-size:12px
+}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.view-team{
+  width:100%;display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px;border-radius:16px;border:1px solid var(--glass-stroke);
+  background:var(--glass);backdrop-filter: blur(10px);box-shadow:var(--shadow)
+}
+.view-team-arrow{font-size:28px;line-height:1}
+
+/* Inputs (select + search) */
+.select{
+  background:var(--glass);
+  border:1px solid var(--glass-stroke);
+  color:var(--text);
+  padding:10px 12px;border-radius:12px
+}
+.form-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 12px}
+
+.search-row{ margin: 8px 0 4px }
+.input{
+  width:100%;
+  background:var(--glass);
+  border:1px solid var(--glass-stroke);
+  color:var(--text);
+  padding:12px 14px;
+  border-radius:12px;
+  font-size:14px;
+  outline:none;
+}
+.input::placeholder{ color:var(--muted) }
+/* --- HomeHub polish --- */
+.btn-ghost{
+  background:rgba(255,255,255,.08);
+  border:1px solid var(--glass-stroke);
+  color:var(--text);
+  font-weight:800;
+  padding:10px 14px;
+  border-radius:12px;
+  cursor:pointer;
+}
+.btn-ghost:active{ transform: translateY(1px) }
+
+.mini-team{
+  display:flex;flex-wrap:wrap;gap:8px;margin-top:10px
+}
+.mini-pill{
+  display:flex;align-items:center;gap:6px;
+  padding:6px 10px;border-radius:999px;
+  background:rgba(255,255,255,.06);
+  border:1px solid var(--glass-stroke);
+  font-size:12px
+}
+.mini-dot{width:6px;height:6px;border-radius:999px;background:var(--cta);display:inline-block}
+.mini-more{
+  padding:6px 10px;border-radius:999px;border:1px dashed var(--glass-stroke);
+  color:var(--muted);font-size:12px
+}
+
+/* Action cards use same visual as .card but clickable */
+.action-card{
+  text-align:left;
+  background:var(--glass);
+  border:1px solid var(--glass-stroke);
+  border-radius:18px;
+  padding:14px 16px;
+  box-shadow:var(--shadow);
+  cursor:pointer;
+}
+.action-card:active{ transform: translateY(1px) }
+
+/* Banner nudging user to finish squad */
+.banner{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:14px 16px;border-radius:18px;margin-top:14px;
+  background:linear-gradient(180deg, rgba(60,255,114,.12), rgba(255,255,255,.06));
+  border:1px solid rgba(60,255,114,.35);
+}
+/* Ghost button used in HomeHub */
+.btn-ghost{
+  background:rgba(255,255,255,.08);
+  border:1px solid var(--glass-stroke);
+  color:var(--text);
+  font-weight:800;
+  padding:10px 14px;
+  border-radius:12px;
+  cursor:pointer;
+}
+.btn-ghost:active{ transform: translateY(1px) }
+
+.mini-team{ display:flex;flex-wrap:wrap;gap:8px;margin-top:10px }
+.mini-pill{
+  display:flex;align-items:center;gap:6px;
+  padding:6px 10px;border-radius:999px;
+  background:rgba(255,255,255,.06);
+  border:1px solid var(--glass-stroke);
+  font-size:12px
+}
+.mini-dot{width:6px;height:6px;border-radius:999px;background:var(--cta);display:inline-block}
+.mini-more{
+  padding:6px 10px;border-radius:999px;border:1px dashed var(--glass-stroke);
+  color:var(--muted);font-size:12px
+}
+
+/* Clickable card */
+.action-card{
+  text-align:left;
+  background:var(--glass);
+  border:1px solid var(--glass-stroke);
+  border-radius:18px;
+  padding:14px 16px;
+  box-shadow:var(--shadow);
+  cursor:pointer;
+}
+.action-card:active{ transform: translateY(1px) }
+
+/* Finish squad banner */
+.banner{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:14px 16px;border-radius:18px;margin-top:14px;
+  background:linear-gradient(180deg, rgba(60,255,114,.12), rgba(255,255,255,.06));
+  border:1px solid rgba(60,255,114,.35);
+}
+/* Top bar with Back */
+.topbar{
+  position:sticky; top:0; z-index:7;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 8px; margin:-10px -6px 8px; /* visually stretch a bit */
+  background:rgba(8,8,10,.75);
+  backdrop-filter: saturate(1.2) blur(10px);
+  border-bottom:1px solid var(--glass-stroke);
+}
+.topbar-left{ display:flex; align-items:center; gap:8px }
+.btn-back{
+  appearance:none; border:1px solid var(--glass-stroke);
+  background:rgba(255,255,255,.08); color:var(--text);
+  font-weight:900; font-size:22px; line-height:1;
+  width:36px; height:36px; border-radius:12px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+}
+.btn-back:active{ transform: translateY(1px) }
+.topbar-title{ font-weight:900; font-size:16px; letter-spacing:.2px }
+.topbar-right{ display:flex; align-items:center; gap:8px }
+/* --- Quick Actions (beautiful cards) --- */
+.qa-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+.qa-card{
+  display:flex; align-items:center; gap:12px;
+  padding:14px; border-radius:16px; border:1px solid var(--glass-stroke);
+  background: linear-gradient(160deg, rgba(255,255,255,.14), rgba(255,255,255,.06));
+  box-shadow: var(--shadow);
+  cursor:pointer;
+  text-align:left;
+}
+.qa-card:active{ transform: translateY(1px) }
+.qa-icon{
+  width:42px; height:42px; border-radius:12px;
+  background: rgba(255,255,255,.12);
+  display:flex; align-items:center; justify-content:center;
+  font-size:22px;
+}
+.qa-text{ display:flex; flex-direction:column; gap:4px }
+.qa-title{ font-weight:900; font-size:15px; letter-spacing:.2px }
+
+/* subtle color tints per card */
+.qa-green{ background: linear-gradient(160deg, rgba(60,255,114,.20), rgba(255,255,255,.06)) }
+.qa-blue{  background: linear-gradient(160deg, rgba(120,180,255,.22), rgba(255,255,255,.06)) }
+.qa-purple{background: linear-gradient(160deg, rgba(190,120,255,.22), rgba(255,255,255,.06)) }
+.qa-orange{background: linear-gradient(160deg, rgba(255,180,120,.22), rgba(255,255,255,.06)) }
+
+/* existing ghost + mini team styles you already have are fine */

@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --safe-top: env(safe-area-inset-top);
+  --safe-bottom: env(safe-area-inset-bottom);
+}
+
+html, body, #root { height: 100%; }
+body { margin: 0; background: var(--tg-theme-bg-color, #0b0b0c); color: var(--tg-theme-text-color, #fff); }
