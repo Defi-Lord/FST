@@ -8,9 +8,9 @@ type FplElement = {
   id: number
   web_name: string
   team: number
-  now_cost: number    // in tenths of a million (e.g. 96 => 9.6m)
-  element_type: number // 1 GK, 2 DEF, 3 MID, 4 FWD
-  form: string        // "8.4"
+  now_cost: number       // tenths of a million (e.g. 96 -> 9.6m)
+  element_type: number   // 1 GK, 2 DEF, 3 MID, 4 FWD
+  form: string           // "8.4"
 }
 type FplTeam = { id: number; name: string }
 
@@ -21,6 +21,7 @@ function mapTypeToPosition(t: number): Position {
 }
 
 function normalizePlayer(e: FplElement, teamNameById: Map<number, string>): Player {
+  // IMPORTANT: id as STRING to match your state (your local JSON had string ids).
   return {
     id: String(e.id),
     name: e.web_name,
@@ -33,11 +34,12 @@ function normalizePlayer(e: FplElement, teamNameById: Map<number, string>): Play
 
 export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onBack?: () => void }) {
   const { team, addPlayer, removePlayer, budget } = useApp()
+
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [pool, setPool] = useState<Player[]>([])
 
-  // UI controls
+  // UI state
   const [q, setQ] = useState('')
   const [sortBy, setSortBy] = useState<'value' | 'form'>('value')
 
@@ -47,22 +49,19 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
       try {
         setLoading(true)
         setError(null)
-
-        // Real FPL bootstrap (teams + elements)
-        const data = await fetchBootstrap()
+        const data = await fetchBootstrap() // /api/fpl/bootstrap-static
         const teams: FplTeam[] = data?.teams || []
         const elements: FplElement[] = data?.elements || []
 
         const teamNameById = new Map(teams.map(t => [t.id, t.name]))
         const mapped: Player[] = elements.map(e => normalizePlayer(e, teamNameById))
-
         if (!mounted) return
         setPool(mapped)
       } catch {
         if (!mounted) return
         setError('Couldn’t load real FPL players. Showing fallback list — real FPL fetch failed. Check your /api setup.')
 
-        // Fallback from /public
+        // fallback from /public
         try {
           const r = await fetch('/fallback-players.json', { cache: 'no-store' })
           const arr = (await r.json()) as any[]
@@ -85,12 +84,14 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
     return () => { mounted = false }
   }, [])
 
-  const pickedIds = useMemo(() => new Set(team.map(p => p.id)), [team])
+  // Normalize team ids to string (so Set membership works even if some came in as numbers earlier)
+  const pickedIds = useMemo(() => new Set(team.map(p => String(p.id))), [team])
+  const selectedCount = team.length
 
-  // Filter + sort (FPL: value first). Secondary sort by form desc, then name.
+  // Filter + sort
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    const base = needle
+    const filtered = needle
       ? pool.filter(p =>
           p.name.toLowerCase().includes(needle) ||
           p.club.toLowerCase().includes(needle) ||
@@ -98,20 +99,15 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
         )
       : pool.slice()
 
-    base.sort((a, b) => {
-      const primary = sortBy === 'value'
-        ? b.price - a.price
-        : b.form - a.form
-      if (primary !== 0) return primary
-      const secondary = b.form - a.form
-      if (secondary !== 0) return secondary
+    filtered.sort((a, b) => {
+      const prim = sortBy === 'value' ? b.price - a.price : b.form - a.form
+      if (prim !== 0) return prim
+      const sec = b.form - a.form
+      if (sec !== 0) return sec
       return a.name.localeCompare(b.name)
     })
-    return base
+    return filtered
   }, [pool, q, sortBy])
-
-  const selectedCount = team.length
-  const canProceed = selectedCount > 0 && selectedCount <= MAX_SQUAD
 
   function tryAdd(p: Player) {
     if (selectedCount >= MAX_SQUAD) {
@@ -122,7 +118,8 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
       alert(`Not enough budget. You have £${budget.toFixed(1)}m, but ${p.name} costs £${p.price.toFixed(1)}m.`)
       return
     }
-    addPlayer(p) // relies on your state to update budget & team
+    // Ensure we pass the normalized Player shape your state expects
+    addPlayer({ ...p, id: String(p.id) })
   }
 
   return (
@@ -134,12 +131,13 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
           rightSlot={<div className="balance-chip">£{budget.toFixed(1)}m</div>}
         />
 
-        {/* Controls: Budget / Selected, Search, Sort */}
+        {/* Header chips */}
         <div className="row" style={{alignItems:'center', gap:10, marginTop:8}}>
           <div className="chip">Budget: £{budget.toFixed(1)}m</div>
           <div className="chip">Selected: {selectedCount}/{MAX_SQUAD}</div>
         </div>
 
+        {/* Search + sort */}
         <div className="form-row" style={{marginTop:10}}>
           <input
             value={q}
@@ -167,11 +165,12 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
               <div className="card subtle">No players match your search.</div>
             )}
             {visible.map(p => {
-              const picked = pickedIds.has(p.id)
+              const idStr = String(p.id)
+              const picked = pickedIds.has(idStr)
               const disableAdd = selectedCount >= MAX_SQUAD || budget < p.price
 
               return (
-                <div key={p.id} className="row card">
+                <div key={idStr} className="row card">
                   <div>
                     <div style={{ fontWeight: 800 }}>{p.name}</div>
                     <div className="subtle">
@@ -183,7 +182,7 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
                     <div className="price">£{p.price.toFixed(1)}m</div>
 
                     {picked ? (
-                      <button className="btn-remove" onClick={() => removePlayer(p.id)}>
+                      <button className="btn-remove" onClick={() => removePlayer(idStr)}>
                         Remove
                       </button>
                     ) : (
@@ -216,7 +215,7 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
               Pick up to {MAX_SQUAD} players within your £100m budget, then enter contests.
             </div>
           </div>
-          <button className="cta" disabled={!canProceed} onClick={onNext}>
+          <button className="cta" disabled={selectedCount === 0 || selectedCount > MAX_SQUAD} onClick={onNext}>
             Continue
           </button>
         </div>
