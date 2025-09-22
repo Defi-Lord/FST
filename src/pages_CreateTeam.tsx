@@ -4,9 +4,6 @@ import { useApp, type Player, Position } from './state'
 import TopBar from './components_TopBar'
 import { fetchBootstrap } from './api'
 
-// fallback (your local minimal list, adjust path if needed)
-import fallbackList from '../f0bcaf12-17dd-4836-93ba-fb0ca76f00d3.json'
-
 type FplElement = {
   id: number
   web_name: string
@@ -53,16 +50,24 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
       } catch (e: any) {
         if (!mounted) return
         setError('Couldn’t load real FPL players. Showing fallback list — real FPL fetch failed. Check your /api setup.')
-        // map your small fallback JSON to Player[]
-        const mapped: Player[] = (fallbackList as any[]).map(p => ({
-          id: String(p.id),
-          name: p.name,
-          club: p.club,
-          position: p.position as Position,
-          price: Number(p.price),
-          form: Number(p.form),
-        }))
-        setPool(mapped)
+
+        // fetch fallback from /public
+        try {
+          const r = await fetch('/fallback-players.json', { cache: 'no-store' })
+          const arr = await r.json()
+          const mapped: Player[] = (arr as any[]).map(p => ({
+            id: String(p.id),
+            name: p.name,
+            club: p.club,
+            position: p.position as Position,
+            price: Number(p.price),
+            form: Number(p.form),
+          }))
+          setPool(mapped)
+        } catch {
+          // if even fallback fails, just leave pool empty
+          setPool([])
+        }
       } finally {
         if (mounted) setLoading(false)
       }
