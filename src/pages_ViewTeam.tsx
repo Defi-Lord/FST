@@ -1,3 +1,4 @@
+// src/pages_ViewTeam.tsx
 import { useMemo } from 'react'
 import { useApp, Position } from './state'
 import TopBar from './components_TopBar'
@@ -21,7 +22,11 @@ export default function ViewTeam({ onBack }: { onBack: () => void }){
   return (
     <div className="screen">
       <div className="container" style={{paddingBottom:110}}>
-        <TopBar title="Your Team" onBack={onBack} rightSlot={<div className="balance-chip">£{budget.toFixed(1)}m</div>} />
+        <TopBar
+          title="Your Team"
+          onBack={onBack}
+          rightSlot={<div className="balance-chip">£{budget.toFixed(1)}m</div>}
+        />
 
         <div className="form-row">
           <span className="subtle">Formation</span>

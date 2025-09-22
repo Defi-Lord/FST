@@ -1,8 +1,8 @@
 // src/pages_HomeHub.tsx
 import { useEffect, useMemo, useState } from 'react'
 import { useApp } from './state'
-import { loadNextFixture, type Fixture } from './fixtures_loader'
 import TopBar from './components_TopBar'
+import { fetchFixtures, fetchBootstrap } from './api' // ← use your Vercel API
 
 type Props = {
   onViewTeam: () => void
@@ -17,6 +17,7 @@ type Props = {
 
 type LbEntry = { name: string; points: number }
 
+// simple leaderbord preview loader (unchanged)
 async function loadLeaderboardPreview(timeoutMs = 7000): Promise<LbEntry[] | null> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort('timeout'), timeoutMs)
@@ -39,6 +40,37 @@ function formatLocal(dtIso: string) {
   } catch { return dtIso }
 }
 
+// shape we render after mapping FPL teams → names
+type NextFixtureView = { home: string; away: string; kickoff_utc: string }
+
+// pick the first upcoming fixture and map team IDs → names using bootstrap data
+async function loadNextFixtureFromFPL(): Promise<NextFixtureView | null> {
+  const [fixtures, bootstrap] = await Promise.all([
+    fetchFixtures(),        // /api/fpl/fixtures?future=1
+    fetchBootstrap()        // /api/fpl/bootstrap-static
+  ])
+
+  // map team ID → team name
+  const teamNameById = new Map<number, string>()
+  if (bootstrap?.teams) {
+    for (const t of bootstrap.teams) teamNameById.set(t.id, t.name)
+  }
+
+  // choose earliest upcoming fixture that has a kickoff_time
+  const upcoming = (fixtures || [])
+    .filter((f: any) => !!f.kickoff_time)
+    .sort((a: any, b: any) =>
+      new Date(a.kickoff_time).getTime() - new Date(b.kickoff_time).getTime()
+    )[0]
+
+  if (!upcoming) return null
+
+  const home = teamNameById.get(upcoming.team_h) || `Team ${upcoming.team_h}`
+  const away = teamNameById.get(upcoming.team_a) || `Team ${upcoming.team_a}`
+
+  return { home, away, kickoff_utc: upcoming.kickoff_time }
+}
+
 export default function HomeHub({
   onViewTeam, onCreateTeam, onJoinContest, onLeaderboard,
   onTransfers, onFixtures, onStats, onBack
@@ -48,14 +80,14 @@ export default function HomeHub({
   const progressPct = useMemo(() => Math.min(100, Math.round((picked / 15) * 100)), [picked])
 
   const [lb, setLb] = useState<LbEntry[] | null | 'error'>(null)
-  const [fixture, setFixture] = useState<Fixture | null | 'error'>(null)
+  const [fixture, setFixture] = useState<NextFixtureView | null | 'error'>(null)
 
   useEffect(() => {
     let mounted = true
     ;(async () => {
       const [a, f] = await Promise.all([
         loadLeaderboardPreview().catch(() => 'error' as const),
-        loadNextFixture().catch(() => 'error' as const)
+        loadNextFixtureFromFPL().catch(() => 'error' as const)
       ])
       if (!mounted) return
       setLb(a === 'error' ? 'error' : a)
@@ -112,11 +144,11 @@ export default function HomeHub({
           )}
         </div>
 
-        {/* Next Fixture – real FPL */}
+        {/* Next Fixture – now from real FPL via /api */}
         <div className="title-xl" style={{margin:'18px 0 8px'}}>Next Fixture</div>
         <div className="card">
           {fixture === null && <div className="subtle">Loading next match…</div>}
-          {fixture === 'error' && <div className="subtle">Couldn’t load fixtures. Check your FPL proxy/relay.</div>}
+          {fixture === 'error' && <div className="subtle">Couldn’t load fixtures. Check your /api setup.</div>}
           {fixture && fixture !== 'error' && (
             <div className="row" style={{alignItems:'flex-start', gap:16}}>
               <div>
@@ -175,7 +207,7 @@ export default function HomeHub({
           </div>
         )}
 
-        {/* Quick Actions – prettified */}
+        {/* Quick Actions */}
         <div className="title-xl" style={{margin:'18px 0 12px'}}>Quick Actions</div>
         <div className="qa-grid">
           <button className="qa-card qa-green" onClick={onCreateTeam}>
