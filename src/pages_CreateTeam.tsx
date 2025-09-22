@@ -1,16 +1,33 @@
+// src/pages_CreateTeam.tsx
 import { useEffect, useMemo, useState } from 'react'
-import { SAMPLE_PLAYERS, useApp, type Player } from './state'
-import { loadPlayers } from './players_loader'
+import { useApp, type Player, Position } from './state'
 import TopBar from './components_TopBar'
+import { fetchBootstrap } from './api'
 
-export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
-  const { budget, team, addPlayer, removePlayer, setBudget } = useApp()
-  const [players, setPlayers] = useState<Player[]>([])
+// fallback (your local minimal list, adjust path if needed)
+import fallbackList from '../f0bcaf12-17dd-4836-93ba-fb0ca76f00d3.json'
+
+type FplElement = {
+  id: number
+  web_name: string
+  team: number
+  now_cost: number
+  element_type: number
+  form: string
+}
+
+type FplTeam = { id: number; name: string }
+
+function mapTypeToPosition(t: number): Position {
+  // 1=GK, 2=DEF, 3=MID, 4=FWD (FPL convention)
+  return (['', 'GK','DEF','MID','FWD'] as any)[t] as Position
+}
+
+export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onBack?: () => void }) {
+  const { team, addPlayer, removePlayer, budget } = useApp()
   const [loading, setLoading] = useState(true)
-  const [query, setQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => { if (budget <= 0) setBudget(100.0) }, [budget, setBudget])
+  const [pool, setPool] = useState<Player[]>([])
 
   useEffect(() => {
     let mounted = true
@@ -18,19 +35,34 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
       try {
         setLoading(true)
         setError(null)
-        const external = await loadPlayers()
+        const data = await fetchBootstrap() // ← calls /api/fpl/bootstrap-static
+        const teams: FplTeam[] = data?.teams || []
+        const elements: FplElement[] = data?.elements || []
+
+        const teamNameById = new Map(teams.map(t => [t.id, t.name]))
+        const mapped: Player[] = elements.slice(0, 200).map(e => ({
+          id: String(e.id),
+          name: e.web_name,
+          club: teamNameById.get(e.team) || `Team ${e.team}`,
+          position: mapTypeToPosition(e.element_type),
+          price: Number((e.now_cost || 0) / 10),
+          form: Number(parseFloat(e.form || '0')),
+        }))
         if (!mounted) return
-        if (external && external.length >= 50) {
-          setPlayers(external)
-        } else {
-          setPlayers(SAMPLE_PLAYERS)
-          setError('Showing fallback list — real FPL fetch failed. Check your proxy/relay.')
-        }
-      } catch {
-        if (mounted) {
-          setPlayers(SAMPLE_PLAYERS)
-          setError('Showing fallback list — unexpected error loading FPL.')
-        }
+        setPool(mapped)
+      } catch (e: any) {
+        if (!mounted) return
+        setError('Couldn’t load real FPL players. Showing fallback list — real FPL fetch failed. Check your /api setup.')
+        // map your small fallback JSON to Player[]
+        const mapped: Player[] = (fallbackList as any[]).map(p => ({
+          id: String(p.id),
+          name: p.name,
+          club: p.club,
+          position: p.position as Position,
+          price: Number(p.price),
+          form: Number(p.form),
+        }))
+        setPool(mapped)
       } finally {
         if (mounted) setLoading(false)
       }
@@ -38,79 +70,51 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
     return () => { mounted = false }
   }, [])
 
-  const canContinue = team.length === 15
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return players
-    return players.filter(p => p.name.toLowerCase().includes(q))
-  }, [players, query])
-
-  const content = useMemo(() => {
-    if (loading) return <div className="card">Loading players…</div>
-    if (!filtered.length) {
-      return (
-        <div className="card">
-          <div style={{fontWeight:800, marginBottom:6}}>No results</div>
-          <div className="subtle">Try a different player name.</div>
-        </div>
-      )
-    }
-    return filtered.map((p) => {
-      const inTeam = team.some(t => t.id === p.id)
-      return (
-        <div className="card" key={p.id}>
-          <div className="row">
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <div className="avatar" />
-              <div>
-                <div style={{ fontWeight: 800 }}>{p.name}</div>
-                <div className="subtle">{p.position} • {p.club}</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <div className="price">£{p.price.toFixed(1)}m</div>
-              {inTeam ? (
-                <button className="btn-remove" onClick={() => removePlayer(p.id)}>Remove</button>
-              ) : (
-                <button className="btn-add" onClick={() => {
-                  const err = addPlayer(p)
-                  if (err) alert(err)
-                }}>Add</button>
-              )}
-            </div>
-          </div>
-        </div>
-      )
-    })
-  }, [loading, filtered, team, addPlayer, removePlayer])
+  const pickedIds = useMemo(() => new Set(team.map(p => p.id)), [team])
 
   return (
     <div className="screen">
-      <div className="bg bg-field" /><div className="scrim" />
       <div className="container" style={{ paddingBottom: 110 }}>
-        <TopBar title="Create Your Team" onBack={onBack} />
-        <div className="meta-row">
-          <div className="chip">Budget: <strong>£{budget.toFixed(1)}m</strong></div>
-          <div className="chip">Selected: <strong>{team.length}/15</strong></div>
-          <div className="chip">Available: <strong>{players.length}</strong></div>
-        </div>
-        {error && (
-          <div className="card" style={{borderColor:'rgba(255,80,80,.5)'}}>
-            <div style={{fontWeight:800, marginBottom:6}}>Couldn’t load real FPL players</div>
-            <div className="subtle">{error}</div>
+        <TopBar title="Create Your Team" onBack={onBack} rightSlot={<div className="balance-chip">£{budget.toFixed(1)}m</div>} />
+
+        {loading && <div className="card subtle">Loading players…</div>}
+        {error && <div className="card subtle">{error}</div>}
+
+        {!loading && (
+          <div className="list">
+            {pool.map(p => {
+              const picked = pickedIds.has(p.id)
+              return (
+                <div key={p.id} className="row card">
+                  <div>
+                    <div style={{ fontWeight: 800 }}>{p.name}</div>
+                    <div className="subtle">{p.club} • {p.position}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div className="price">£{p.price.toFixed(1)}m</div>
+                    {picked ? (
+                      <button className="btn-remove" onClick={() => removePlayer(p.id)}>Remove</button>
+                    ) : (
+                      <button className="btn-add" onClick={() => addPlayer(p)}>Add</button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
-        <div className="search-row">
-          <input className="input" type="search" placeholder="Search players by name…" value={query} onChange={e => setQuery(e.target.value)} />
-        </div>
-        <div className="list">{content}</div>
 
-        <div className="bottom-actions">
-          <button className="cta" style={{ width: '100%' }} disabled={!canContinue} onClick={onNext}>
-            {canContinue ? 'Continue' : 'Pick 15 players to continue'}
-          </button>
+        <div className="banner" style={{ marginTop: 16 }}>
+          <div>
+            <div style={{ fontWeight: 900 }}>Finish your squad</div>
+            <div className="subtle">Pick players to complete your XI and enter contests.</div>
+          </div>
+          <button className="cta" onClick={onNext}>Continue</button>
         </div>
+      </div>
+
+      <div className="tabbar">
+        <button className="tab active"><span>Create Team</span></button>
       </div>
     </div>
   )
