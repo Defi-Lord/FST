@@ -32,7 +32,7 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
       try {
         setLoading(true)
         setError(null)
-        const data = await fetchBootstrap() // ← calls /api/fpl/bootstrap-static
+        const data = await fetchBootstrap() // calls /api/fpl/bootstrap-static
         const teams: FplTeam[] = data?.teams || []
         const elements: FplElement[] = data?.elements || []
 
@@ -47,11 +47,11 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
         }))
         if (!mounted) return
         setPool(mapped)
-      } catch (e: any) {
+      } catch {
         if (!mounted) return
         setError('Couldn’t load real FPL players. Showing fallback list — real FPL fetch failed. Check your /api setup.')
 
-        // fetch fallback from /public
+        // Fallback from /public (create public/fallback-players.json if you haven’t)
         try {
           const r = await fetch('/fallback-players.json', { cache: 'no-store' })
           const arr = await r.json()
@@ -65,7 +65,6 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
           }))
           setPool(mapped)
         } catch {
-          // if even fallback fails, just leave pool empty
           setPool([])
         }
       } finally {
