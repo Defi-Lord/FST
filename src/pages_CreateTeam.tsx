@@ -20,12 +20,11 @@ function mapTypeToPosition(t: number): Position {
   return (['', 'GK','DEF','MID','FWD'] as any)[t] as Position
 }
 
-function normalizePlayer(e: FplElement, teamNameById: Map<number, string>): Player {
-  // IMPORTANT: id as STRING to match your state (your local JSON had string ids).
+function toPlayer(e: FplElement, teamsById: Map<number, string>): Player {
   return {
-    id: String(e.id),
+    id: String(e.id), // normalize raw FPL id to string initially
     name: e.web_name,
-    club: teamNameById.get(e.team) || `Team ${e.team}`,
+    club: teamsById.get(e.team) || `Team ${e.team}`,
     position: mapTypeToPosition(e.element_type),
     price: Number((e.now_cost || 0) / 10),
     form: Number(parseFloat(e.form || '0')),
@@ -43,30 +42,45 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
   const [q, setQ] = useState('')
   const [sortBy, setSortBy] = useState<'value' | 'form'>('value')
 
+  // Detect the ID type your store uses (string or number) and coerce everything to match
+  const storeIdType: 'string' | 'number' = useMemo(() => {
+    const sample = team[0]?.id
+    return typeof sample === 'number' ? 'number' : 'string'
+  }, [team])
+
+  const coerceId = (id: string | number) =>
+    storeIdType === 'number' ? Number(id) : String(id)
+
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
         setLoading(true)
         setError(null)
+
         const data = await fetchBootstrap() // /api/fpl/bootstrap-static
         const teams: FplTeam[] = data?.teams || []
         const elements: FplElement[] = data?.elements || []
+        const teamsById = new Map(teams.map(t => [t.id, t.name]))
 
-        const teamNameById = new Map(teams.map(t => [t.id, t.name]))
-        const mapped: Player[] = elements.map(e => normalizePlayer(e, teamNameById))
+        const mapped: Player[] = elements.map(e => {
+          const p = toPlayer(e, teamsById)
+          // coerce id to store type right here so everything stays consistent
+          return { ...p, id: coerceId(p.id) as any }
+        })
+
         if (!mounted) return
         setPool(mapped)
       } catch {
         if (!mounted) return
         setError('Couldn’t load real FPL players. Showing fallback list — real FPL fetch failed. Check your /api setup.')
 
-        // fallback from /public
+        // /public fallback
         try {
           const r = await fetch('/fallback-players.json', { cache: 'no-store' })
           const arr = (await r.json()) as any[]
           const mapped: Player[] = arr.map(p => ({
-            id: String(p.id),
+            id: coerceId(p.id) as any,
             name: p.name,
             club: p.club,
             position: p.position as Position,
@@ -82,13 +96,13 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
       }
     })()
     return () => { mounted = false }
-  }, [])
+  }, [storeIdType])
 
-  // Normalize team ids to string (so Set membership works even if some came in as numbers earlier)
-  const pickedIds = useMemo(() => new Set(team.map(p => String(p.id))), [team])
+  // build the picked set using exactly the store id type
+  const pickedIds = useMemo(() => new Set(team.map(p => coerceId(p.id))), [team, storeIdType])
   const selectedCount = team.length
 
-  // Filter + sort
+  // filter + sort
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase()
     const filtered = needle
@@ -110,17 +124,29 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
   }, [pool, q, sortBy])
 
   function tryAdd(p: Player) {
+    // ensure id matches store type
+    const normalized: Player = { ...p, id: coerceId(p.id) as any }
+
     if (selectedCount >= MAX_SQUAD) {
       alert(`You can only pick ${MAX_SQUAD} players.`)
       return
     }
-    if (budget < p.price) {
-      alert(`Not enough budget. You have £${budget.toFixed(1)}m, but ${p.name} costs £${p.price.toFixed(1)}m.`)
+    if (budget < normalized.price) {
+      alert(`Not enough budget. You have £${budget.toFixed(1)}m, but ${normalized.name} costs £${normalized.price.toFixed(1)}m.`)
       return
     }
-    // Ensure we pass the normalized Player shape your state expects
-    addPlayer({ ...p, id: String(p.id) })
+
+    console.log('[CreateTeam] addPlayer', normalized.id, normalized.name)
+    addPlayer(normalized)
   }
+
+  function onRemove(id: Player['id']) {
+    const coerced = coerceId(id) as any
+    console.log('[CreateTeam] removePlayer', coerced)
+    removePlayer(coerced)
+  }
+
+  const canProceed = selectedCount > 0 && selectedCount <= MAX_SQUAD
 
   return (
     <div className="screen">
@@ -131,7 +157,7 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
           rightSlot={<div className="balance-chip">£{budget.toFixed(1)}m</div>}
         />
 
-        {/* Header chips */}
+        {/* Chips: budget + selected */}
         <div className="row" style={{alignItems:'center', gap:10, marginTop:8}}>
           <div className="chip">Budget: £{budget.toFixed(1)}m</div>
           <div className="chip">Selected: {selectedCount}/{MAX_SQUAD}</div>
@@ -165,12 +191,12 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
               <div className="card subtle">No players match your search.</div>
             )}
             {visible.map(p => {
-              const idStr = String(p.id)
-              const picked = pickedIds.has(idStr)
+              const idKey = coerceId(p.id) as any
+              const picked = pickedIds.has(idKey)
               const disableAdd = selectedCount >= MAX_SQUAD || budget < p.price
 
               return (
-                <div key={idStr} className="row card">
+                <div key={String(idKey)} className="row card">
                   <div>
                     <div style={{ fontWeight: 800 }}>{p.name}</div>
                     <div className="subtle">
@@ -182,7 +208,7 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
                     <div className="price">£{p.price.toFixed(1)}m</div>
 
                     {picked ? (
-                      <button className="btn-remove" onClick={() => removePlayer(idStr)}>
+                      <button className="btn-remove" onClick={() => onRemove(idKey)}>
                         Remove
                       </button>
                     ) : (
@@ -215,7 +241,7 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
               Pick up to {MAX_SQUAD} players within your £100m budget, then enter contests.
             </div>
           </div>
-          <button className="cta" disabled={selectedCount === 0 || selectedCount > MAX_SQUAD} onClick={onNext}>
+          <button className="cta" disabled={!canProceed} onClick={onNext}>
             Continue
           </button>
         </div>
