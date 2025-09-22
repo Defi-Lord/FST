@@ -2,13 +2,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useApp } from './state'
 import TopBar from './components_TopBar'
-import { fetchFixtures, fetchBootstrap } from './api' // ← use your Vercel API
+import { fetchFixtures, fetchBootstrap } from './api' // uses your Vercel /api routes
 
 type Props = {
-  onViewTeam: () => void
-  onCreateTeam: () => void
-  onJoinContest: () => void
-  onLeaderboard: () => void
+  onViewTeam?: () => void
+  onCreateTeam?: () => void
+  onJoinContest?: () => void
+  onLeaderboard?: () => void
   onTransfers?: () => void
   onFixtures?: () => void
   onStats?: () => void
@@ -17,7 +17,6 @@ type Props = {
 
 type LbEntry = { name: string; points: number }
 
-// simple leaderbord preview loader (unchanged)
 async function loadLeaderboardPreview(timeoutMs = 7000): Promise<LbEntry[] | null> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort('timeout'), timeoutMs)
@@ -40,23 +39,19 @@ function formatLocal(dtIso: string) {
   } catch { return dtIso }
 }
 
-// shape we render after mapping FPL teams → names
 type NextFixtureView = { home: string; away: string; kickoff_utc: string }
 
-// pick the first upcoming fixture and map team IDs → names using bootstrap data
 async function loadNextFixtureFromFPL(): Promise<NextFixtureView | null> {
   const [fixtures, bootstrap] = await Promise.all([
     fetchFixtures(),        // /api/fpl/fixtures?future=1
     fetchBootstrap()        // /api/fpl/bootstrap-static
   ])
 
-  // map team ID → team name
   const teamNameById = new Map<number, string>()
   if (bootstrap?.teams) {
     for (const t of bootstrap.teams) teamNameById.set(t.id, t.name)
   }
 
-  // choose earliest upcoming fixture that has a kickoff_time
   const upcoming = (fixtures || [])
     .filter((f: any) => !!f.kickoff_time)
     .sort((a: any, b: any) =>
@@ -72,8 +67,14 @@ async function loadNextFixtureFromFPL(): Promise<NextFixtureView | null> {
 }
 
 export default function HomeHub({
-  onViewTeam, onCreateTeam, onJoinContest, onLeaderboard,
-  onTransfers, onFixtures, onStats, onBack
+  onViewTeam,
+  onCreateTeam,
+  onJoinContest,
+  onLeaderboard,
+  onTransfers,
+  onFixtures,
+  onStats,
+  onBack
 }: Props) {
   const { fullName, budget, team } = useApp()
   const picked = team.length
@@ -96,9 +97,18 @@ export default function HomeHub({
     return () => { mounted = false }
   }, [])
 
+  // sensible fallbacks so your main.tsx can pass only onViewTeam
+  const handleViewTeam   = onViewTeam ?? (() => alert('Open Team'))
+  const handleCreateTeam = onCreateTeam ?? handleViewTeam
+  const handleTransfers  = onTransfers ?? (() => alert('Transfers coming soon'))
+  const handleFixtures   = onFixtures ?? (() => alert('Fixtures coming soon'))
+  const handleStats      = onStats ?? (() => alert('Stats coming soon'))
+  const handleJoin       = onJoinContest ?? (() => alert('Join contest coming soon'))
+  const handleLb         = onLeaderboard ?? (() => alert('Leaderboard coming soon'))
+
   const primaryAction = picked < 15
-    ? { label: `Pick ${15 - picked} more`, onClick: onCreateTeam }
-    : { label: 'View Team', onClick: onViewTeam }
+    ? { label: `Pick ${15 - picked} more`, onClick: handleCreateTeam }
+    : { label: 'View Team', onClick: handleViewTeam }
 
   const clubsInFixture = useMemo(() => {
     if (!fixture || fixture === 'error') return { count: 0, clubs: [] as string[] }
@@ -144,7 +154,7 @@ export default function HomeHub({
           )}
         </div>
 
-        {/* Next Fixture – now from real FPL via /api */}
+        {/* Next Fixture – via /api */}
         <div className="title-xl" style={{margin:'18px 0 8px'}}>Next Fixture</div>
         <div className="card">
           {fixture === null && <div className="subtle">Loading next match…</div>}
@@ -160,7 +170,7 @@ export default function HomeHub({
                   </div>
                 )}
               </div>
-              <button className="btn-ghost" onClick={onFixtures}>View fixtures</button>
+              <button className="btn-ghost" onClick={handleFixtures}>View fixtures</button>
             </div>
           )}
         </div>
@@ -174,8 +184,8 @@ export default function HomeHub({
             <span>Premier League</span><span>Weekly</span><span>Free to play</span>
           </div>
           <div style={{display:'flex',gap:10,marginTop:14}}>
-            <button className="cta" onClick={onJoinContest}>Enter</button>
-            <button className="btn-ghost" onClick={onLeaderboard}>Leaderboard</button>
+            <button className="cta" onClick={handleJoin}>Enter</button>
+            <button className="btn-ghost" onClick={handleLb}>Leaderboard</button>
           </div>
         </div>
 
@@ -193,7 +203,7 @@ export default function HomeHub({
               <div style={{fontWeight:800}}>{e.points}</div>
             </div>
           ))}
-          <button className="btn-ghost" onClick={onLeaderboard}>See all</button>
+          <button className="btn-ghost" onClick={handleLb}>See all</button>
         </div>
 
         {/* Finish squad banner */}
@@ -203,14 +213,14 @@ export default function HomeHub({
               <div style={{fontWeight:900}}>Finish your squad</div>
               <div className="subtle">You need {15 - picked} more player{15 - picked === 1 ? '' : 's'} to enter contests.</div>
             </div>
-            <button className="btn-add" onClick={onCreateTeam}>Complete Squad</button>
+            <button className="btn-add" onClick={handleCreateTeam}>Complete Squad</button>
           </div>
         )}
 
         {/* Quick Actions */}
         <div className="title-xl" style={{margin:'18px 0 12px'}}>Quick Actions</div>
         <div className="qa-grid">
-          <button className="qa-card qa-green" onClick={onCreateTeam}>
+          <button className="qa-card qa-green" onClick={handleCreateTeam}>
             <div className="qa-icon">🏗️</div>
             <div className="qa-text">
               <div className="qa-title">Create Team</div>
@@ -218,7 +228,7 @@ export default function HomeHub({
             </div>
           </button>
 
-          <button className="qa-card qa-blue" onClick={onTransfers}>
+          <button className="qa-card qa-blue" onClick={handleTransfers}>
             <div className="qa-icon">🔁</div>
             <div className="qa-text">
               <div className="qa-title">Transfers</div>
@@ -226,7 +236,7 @@ export default function HomeHub({
             </div>
           </button>
 
-          <button className="qa-card qa-purple" onClick={onFixtures}>
+          <button className="qa-card qa-purple" onClick={handleFixtures}>
             <div className="qa-icon">📅</div>
             <div className="qa-text">
               <div className="qa-title">Fixtures</div>
@@ -234,7 +244,7 @@ export default function HomeHub({
             </div>
           </button>
 
-          <button className="qa-card qa-orange" onClick={onStats}>
+          <button className="qa-card qa-orange" onClick={handleStats}>
             <div className="qa-icon">📊</div>
             <div className="qa-text">
               <div className="qa-title">Stats</div>
@@ -247,9 +257,9 @@ export default function HomeHub({
       {/* Bottom nav */}
       <nav className="tabbar">
         <button className="tab active"><span>Home</span></button>
-        <button className="tab" onClick={onJoinContest}><span>Leagues</span></button>
-        <button className="tab" onClick={onLeaderboard}><span>Live</span></button>
-        <button className="tab" onClick={onViewTeam}><span>Profile</span></button>
+        <button className="tab" onClick={handleJoin}><span>Leagues</span></button>
+        <button className="tab" onClick={handleLb}><span>Live</span></button>
+        <button className="tab" onClick={handleViewTeam}><span>Profile</span></button>
       </nav>
     </div>
   )

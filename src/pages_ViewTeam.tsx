@@ -15,7 +15,7 @@ function groupBy<T extends { position: Position }>(arr: T[]){
   }
 }
 
-export default function ViewTeam({ onBack }: { onBack: () => void }){
+export default function ViewTeam({ onBack }: { onBack?: () => void }){
   const { team, formation, setFormation, removePlayer, budget } = useApp()
   const grouped = useMemo(() => groupBy(team), [team])
 
@@ -24,7 +24,7 @@ export default function ViewTeam({ onBack }: { onBack: () => void }){
       <div className="container" style={{paddingBottom:110}}>
         <TopBar
           title="Your Team"
-          onBack={onBack}
+          onBack={onBack}  // safe if undefined
           rightSlot={<div className="balance-chip">£{budget.toFixed(1)}m</div>}
         />
 
