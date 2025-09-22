@@ -51,7 +51,7 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
         if (!mounted) return
         setError('Couldn’t load real FPL players. Showing fallback list — real FPL fetch failed. Check your /api setup.')
 
-        // Fallback from /public (create public/fallback-players.json if you haven’t)
+        // Fallback from /public
         try {
           const r = await fetch('/fallback-players.json', { cache: 'no-store' })
           const arr = await r.json()
