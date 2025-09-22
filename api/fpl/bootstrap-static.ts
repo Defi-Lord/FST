@@ -1,24 +1,22 @@
-export const config = { runtime: 'edge' }
+import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-export default async (req: Request) => {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   const upstream = 'https://fantasy.premierleague.com/api/bootstrap-static/'
   try {
     const r = await fetch(upstream, {
-      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
-    })
-    const body = await r.text()
-    return new Response(body, {
-      status: r.status,
       headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Cache-Control': 'public, max-age=300'
+        'User-Agent': 'Mozilla/5.0 (compatible; FST-TelegramMiniApp/1.0)',
+        'Accept': 'application/json'
       }
     })
+    const body = await r.text()
+    res.status(r.status)
+      .setHeader('Content-Type', 'application/json')
+      .setHeader('Access-Control-Allow-Origin', '*')
+      .setHeader('Cache-Control', 'public, max-age=300')
+      .send(body)
   } catch (e: any) {
-    return new Response('Upstream fetch failed: ' + (e?.message || e), {
-      status: 502,
-      headers: { 'Content-Type': 'text/plain' }
-    })
+    res.status(502).setHeader('Content-Type', 'text/plain')
+      .send('Upstream fetch failed: ' + (e?.message || String(e)))
   }
 }
