@@ -1,4 +1,3 @@
-// src/state.ts
 import React, { createContext, useContext, useMemo, useState } from 'react'
 
 export type Position = 'GK' | 'DEF' | 'MID' | 'FWD'
@@ -36,8 +35,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [team, setTeam] = useState<Player[]>([])
   const [formation, setFormation] = useState<AppState['formation']>('4-4-2')
 
-  const idEq = (a: Player['id'], b: Player['id']) =>
-    String(a) === String(b) // normalize id equality
+  const idEq = (a: Player['id'], b: Player['id']) => String(a) === String(b)
 
   const addPlayer: AppState['addPlayer'] = (p) => {
     // prevent duplicates
@@ -47,7 +45,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // budget check
     if (budget < p.price) return false
 
-    setTeam(prev => [...prev, { ...p, id: typeof team[0]?.id === 'number' ? Number(p.id) : String(p.id) }])
+    const normalizedId = typeof team[0]?.id === 'number' ? Number(p.id) : String(p.id)
+    setTeam(prev => [...prev, { ...p, id: normalizedId }])
     setBudget(prev => Number((prev - p.price).toFixed(1)))
     return true
   }
