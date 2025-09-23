@@ -8,7 +8,8 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36',
         'Accept': 'application/json',
-        'Referer': 'https://fantasy.premierleague.com/'
+        'Referer': 'https://fantasy.premierleague.com/',
+        'Accept-Language': 'en-GB,en;q=0.9'
       },
       cache: 'no-store'
     })
