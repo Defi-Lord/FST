@@ -8,34 +8,42 @@ type FplElement = {
   id: number
   web_name: string
   team: number
-  now_cost: number
-  element_type: number // 1 GK, 2 DEF, 3 MID, 4 FWD
-  form: string
+  now_cost: number        // tenths of a million (e.g. 96 -> £9.6m)
+  element_type: number    // 1 GK, 2 DEF, 3 MID, 4 FWD
+  form: string            // "8.4"
 }
 type FplTeam = { id: number; name: string }
 
 const MAX_SQUAD = 15
 
 function mapTypeToPosition(t: number): Position {
-  return (['', 'GK','DEF','MID','FWD'] as any)[t] as Position
+  return (['', 'GK', 'DEF', 'MID', 'FWD'] as const)[t] as Position
 }
 
-export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onBack?: () => void }) {
+export default function CreateTeam({
+  onNext,
+  onBack,
+}: {
+  onNext: () => void
+  onBack?: () => void
+}) {
   const { team, addPlayer, removePlayer, budget } = useApp()
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [pool, setPool] = useState<Player[]>([])
 
+  // UI state
   const [q, setQ] = useState('')
   const [sortBy, setSortBy] = useState<'value' | 'form'>('value')
 
-  // detect ID type your store uses and coerce everything to match
+  // Detect the ID type your store uses (string or number) and coerce everything to match
   const storeIdType: 'string' | 'number' = useMemo(() => {
     const sample = team[0]?.id
     return typeof sample === 'number' ? 'number' : 'string'
   }, [team])
-  const coerceId = (id: string | number) => (storeIdType === 'number' ? Number(id) : String(id))
+  const coerceId = (id: string | number) =>
+    storeIdType === 'number' ? Number(id) : String(id)
 
   useEffect(() => {
     let mounted = true
@@ -44,13 +52,13 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
         setLoading(true)
         setError(null)
 
-        // Try real FPL via Vercel function
+        // Real FPL bootstrap
         const data = await fetchBootstrap()
         const teams: FplTeam[] = data?.teams ?? []
         const elements: FplElement[] = data?.elements ?? []
-        const teamNameById = new Map(teams.map(t => [t.id, t.name]))
+        const teamNameById = new Map(teams.map((t) => [t.id, t.name]))
 
-        const mapped: Player[] = elements.map(e => ({
+        const mapped: Player[] = elements.map((e) => ({
           id: coerceId(e.id) as any,
           name: e.web_name,
           club: teamNameById.get(e.team) || `Team ${e.team}`,
@@ -68,11 +76,11 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
           'Couldn’t load real FPL players. Showing fallback list — real FPL fetch failed. Check your /api setup.'
         )
 
-        // Fallback from /public
+        // Fallback from /public (put a file at public/fallback-players.json)
         try {
           const r = await fetch('/fallback-players.json', { cache: 'no-store' })
           const arr = (await r.json()) as any[]
-          const mapped: Player[] = arr.map(p => ({
+          const mapped: Player[] = arr.map((p) => ({
             id: coerceId(p.id) as any,
             name: p.name,
             club: p.club,
@@ -89,20 +97,26 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
         if (mounted) setLoading(false)
       }
     })()
-    return () => { mounted = false }
+    return () => {
+      mounted = false
+    }
   }, [storeIdType])
 
-  const pickedIds = useMemo(() => new Set(team.map(p => coerceId(p.id))), [team, storeIdType])
+  const pickedIds = useMemo(
+    () => new Set(team.map((p) => coerceId(p.id))),
+    [team, storeIdType]
+  )
   const selectedCount = team.length
 
-  // Filter + sort
+  // Filter + sort (Value high→low, tie-break by Form, then name)
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase()
     const filtered = needle
-      ? pool.filter(p =>
-          p.name.toLowerCase().includes(needle) ||
-          p.club.toLowerCase().includes(needle) ||
-          p.position.toLowerCase().includes(needle)
+      ? pool.filter(
+          (p) =>
+            p.name.toLowerCase().includes(needle) ||
+            p.club.toLowerCase().includes(needle) ||
+            p.position.toLowerCase().includes(needle)
         )
       : pool.slice()
 
@@ -116,7 +130,6 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
     return filtered
   }, [pool, q, sortBy])
 
-  // Try add/remove with guardrails; handle reducers that return false
   function tryAdd(p: Player) {
     const normalized: Player = { ...p, id: coerceId(p.id) as any }
 
@@ -125,18 +138,22 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
       return
     }
     if (budget < normalized.price) {
-      alert(`Not enough budget. You have £${budget.toFixed(1)}m, but ${normalized.name} costs £${normalized.price.toFixed(1)}m.`)
+      alert(
+        `Not enough budget. You have £${budget.toFixed(1)}m, but ${normalized.name} costs £${normalized.price.toFixed(
+          1
+        )}m.`
+      )
       return
     }
-    const result = (addPlayer as any)(normalized)  // some stores return boolean
-    if (result === false) {
+    const ok = (addPlayer as any)(normalized) // supports reducers that return boolean
+    if (ok === false) {
       alert('Could not add player due to squad constraints.')
     }
   }
 
   function onRemove(id: Player['id']) {
-    const result = (removePlayer as any)(coerceId(id))
-    if (result === false) {
+    const ok = (removePlayer as any)(coerceId(id))
+    if (ok === false) {
       alert('Could not remove player.')
     }
   }
@@ -153,39 +170,38 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
         />
 
         {/* Chips */}
-        <div className="row" style={{alignItems:'center', gap:10, marginTop:8}}>
+        <div className="row" style={{ alignItems: 'center', gap: 10, marginTop: 8 }}>
           <div className="chip">Budget: £{budget.toFixed(1)}m</div>
           <div className="chip">Selected: {selectedCount}/{MAX_SQUAD}</div>
         </div>
 
         {/* Search + Sort */}
-        <div className="form-row" style={{marginTop:10}}>
+        <div className="form-row" style={{ marginTop: 10 }}>
           <input
             value={q}
-            onChange={e => setQ(e.target.value)}
+            onChange={(e) => setQ(e.target.value)}
             placeholder="Search players, club, position…"
             className="input"
           />
           <select
             value={sortBy}
-            onChange={e => setSortBy(e.target.value as any)}
+            onChange={(e) => setSortBy(e.target.value as any)}
             className="select"
-            style={{marginLeft:10}}
+            style={{ marginLeft: 10 }}
           >
             <option value="value">Sort: Value (High→Low)</option>
             <option value="form">Sort: Form (High→Low)</option>
           </select>
         </div>
 
-        {loading && <div className="card subtle" style={{marginTop:10}}>Loading players…</div>}
-        {error && <div className="card subtle" style={{marginTop:10}}>{error}</div>}
+        {loading && <div className="card subtle" style={{ marginTop: 10 }}>Loading players…</div>}
+        {error && <div className="card subtle" style={{ whiteSpace: 'pre-wrap', marginTop: 10 }}>{error}</div>}
 
         {!loading && (
-          <div className="list" style={{marginTop:10}}>
-            {visible.length === 0 && (
-              <div className="card subtle">No players match your search.</div>
-            )}
-            {visible.map(p => {
+          <div className="list" style={{ marginTop: 10 }}>
+            {visible.length === 0 && <div className="card subtle">No players match your search.</div>}
+
+            {visible.map((p) => {
               const idKey = coerceId(p.id)
               const picked = pickedIds.has(idKey)
               const disableAdd = selectedCount >= MAX_SQUAD || budget < p.price
@@ -195,7 +211,7 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
                   <div>
                     <div style={{ fontWeight: 800 }}>{p.name}</div>
                     <div className="subtle">
-                      {p.club} • {p.position} • Form {p.form.toFixed(1)}
+                      {p.club} • {p.position} • Form {Number(p.form || 0).toFixed(1)}
                     </div>
                   </div>
 
@@ -243,7 +259,9 @@ export default function CreateTeam({ onNext, onBack }: { onNext: () => void; onB
       </div>
 
       <div className="tabbar">
-        <button className="tab active"><span>Create Team</span></button>
+        <button className="tab active">
+          <span>Create Team</span>
+        </button>
       </div>
     </div>
   )
