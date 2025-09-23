@@ -1,22 +1,69 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useApp, type Player, Position } from './state'
-import TopBar from './components_TopBar'
-import { fetchBootstrap } from './api'
 
-type FplElement = {
+type Position = 'GK' | 'DEF' | 'MID' | 'FWD'
+type Player = {
   id: number
-  web_name: string
-  team: number
-  now_cost: number        // tenths of a million (e.g. 96 -> £9.6m)
-  element_type: number    // 1 GK, 2 DEF, 3 MID, 4 FWD
-  form: string
+  name: string
+  team: string
+  position: Position
+  price: number  // in millions (e.g. 12.5)
 }
-type FplTeam = { id: number; name: string }
 
-const MAX_SQUAD = 15
+const BUDGET_START = 100.0
+const LIMITS: Record<Position, number> = { GK: 2, DEF: 5, MID: 5, FWD: 3 }
+const TOTAL_SQUAD = 15
+const CLUB_CAP = 3
 
-function mapTypeToPosition(t: number): Position {
-  return (['', 'GK', 'DEF', 'MID', 'FWD'] as const)[t] as Position
+function formatMoney(n: number) { return `£${n.toFixed(1)}m` }
+function remainingBudget(selected: Player[]) {
+  return BUDGET_START - selected.reduce((s, p) => s + p.price, 0)
+}
+function countBy<T extends keyof any>(arr: any[], key: T) {
+  return arr.reduce<Record<string, number>>((acc, it) => {
+    const k = String(it[key])
+    acc[k] = (acc[k] ?? 0) + 1
+    return acc
+  }, {})
+}
+function mapPos(n: number): Position {
+  return n === 1 ? 'GK' : n === 2 ? 'DEF' : n === 3 ? 'MID' : 'FWD'
+}
+
+async function fetchPlayersFromApi(): Promise<Player[]> {
+  // Try same-origin serverless first
+  try {
+    const r = await fetch('/api/players', { headers: { 'cache-control': 'no-cache' } })
+    if (r.ok) {
+      const data = await r.json()
+      const teamsById: Record<number, string> =
+        Object.fromEntries((data.teams as any[]).map((t: any) => [t.id, t.short_name]))
+      const players: Player[] = (data.elements as any[]).map((e: any) => ({
+        id: e.id,
+        name: e.web_name,
+        team: teamsById[e.team] ?? String(e.team),
+        position: mapPos(e.element_type),
+        price: (e.now_cost ?? 0) / 10,
+      }))
+      return players.sort((a, b) => b.price - a.price)
+    }
+  } catch { /* fall through */ }
+
+  // Fallback to direct URL from env (if you’ve set it)
+  const fallbackUrl = import.meta.env.VITE_FPL_PROXY_URL as string | undefined
+  if (!fallbackUrl) throw new Error('Players API unavailable')
+  const r2 = await fetch(fallbackUrl, { headers: { 'user-agent': 'Mozilla/5.0' } })
+  if (!r2.ok) throw new Error(`Failed to load players: ${r2.status}`)
+  const data2 = await r2.json()
+  const teamsById2: Record<number, string> =
+    Object.fromEntries((data2.teams as any[]).map((t: any) => [t.id, t.short_name]))
+  const players2: Player[] = (data2.elements as any[]).map((e: any) => ({
+    id: e.id,
+    name: e.web_name,
+    team: teamsById2[e.team] ?? String(e.team),
+    position: mapPos(e.element_type),
+    price: (e.now_cost ?? 0) / 10,
+  }))
+  return players2.sort((a, b) => b.price - a.price)
 }
 
 export default function CreateTeam({
@@ -24,215 +71,173 @@ export default function CreateTeam({
   onBack,
 }: {
   onNext: () => void
-  onBack?: () => void
+  onBack: () => void
 }) {
-  const { team, addPlayer, removePlayer, budget } = useApp()
-
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [pool, setPool] = useState<Player[]>([])
-
+  const [all, setAll] = useState<Player[]>([])
+  const [selected, setSelected] = useState<Player[]>([])
   const [q, setQ] = useState('')
-  const [sortBy, setSortBy] = useState<'value' | 'form'>('value')
-
-  // Coerce ids to match store type (string/number)
-  const storeIdType: 'string' | 'number' = useMemo(() => {
-    const sample = team[0]?.id
-    return typeof sample === 'number' ? 'number' : 'string'
-  }, [team])
-  const coerceId = (id: string | number) =>
-    storeIdType === 'number' ? Number(id) : String(id)
+  const [pos, setPos] = useState<'ALL' | Position>('ALL')
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      try {
-        setLoading(true)
-        setError(null)
-
-        const data = await fetchBootstrap()
-        const teams: FplTeam[] = data?.teams ?? []
-        const elements: FplElement[] = data?.elements ?? []
-        const teamNameById = new Map(teams.map(t => [t.id, t.name]))
-
-        const mapped: Player[] = elements.map(e => ({
-          id: coerceId(e.id) as any,
-          name: e.web_name,
-          club: teamNameById.get(e.team) || `Team ${e.team}`,
-          position: mapTypeToPosition(e.element_type),
-          price: Number((e.now_cost || 0) / 10),
-          form: Number(parseFloat(e.form || '0')),
-        }))
-
-        if (!mounted) return
-        setPool(mapped)
-      } catch (err: any) {
-        console.error('FPL bootstrap fetch failed:', err)
-        if (!mounted) return
-        setError('Couldn’t load real FPL players. Showing fallback list — real FPL fetch failed. Check your /api setup.')
-
-        // public fallback
-        try {
-          const r = await fetch('/fallback-players.json', { cache: 'no-store' })
-          const arr = (await r.json()) as any[]
-          const mapped: Player[] = arr.map(p => ({
-            id: coerceId(p.id) as any,
-            name: p.name,
-            club: p.club,
-            position: p.position as Position,
-            price: Number(p.price),
-            form: Number(p.form),
-          }))
-          setPool(mapped)
-        } catch (e) {
-          console.error('Fallback list fetch failed:', e)
-          setPool([])
-        }
-      } finally {
-        if (mounted) setLoading(false)
-      }
+    (async () => {
+      try { setLoading(true); setAll(await fetchPlayersFromApi()) }
+      catch (e: any) { setErr(e?.message ?? 'Failed to load players') }
+      finally { setLoading(false) }
     })()
-    return () => { mounted = false }
-  }, [storeIdType])
+  }, [])
 
-  const pickedIds = useMemo(() => new Set(team.map(p => coerceId(p.id))), [team, storeIdType])
-  const selectedCount = team.length
+  const budgetLeft = useMemo(() => remainingBudget(selected), [selected])
+  const posCount = useMemo(() => {
+    const c: Record<Position, number> = { GK: 0, DEF: 0, MID: 0, FWD: 0 }
+    selected.forEach(p => { c[p.position]++ })
+    return c
+  }, [selected])
+  const clubCount = useMemo(() => countBy(selected, 'team'), [selected])
 
-  const visible = useMemo(() => {
-    const needle = q.trim().toLowerCase()
-    const filtered = needle
-      ? pool.filter(p =>
-          p.name.toLowerCase().includes(needle) ||
-          p.club.toLowerCase().includes(needle) ||
-          p.position.toLowerCase().includes(needle)
-        )
-      : pool.slice()
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase()
+    return all
+      .filter(p => pos === 'ALL' || p.position === pos)
+      .filter(p =>
+        term === '' ||
+        p.name.toLowerCase().includes(term) ||
+        p.team.toLowerCase().includes(term) ||
+        p.position.toLowerCase().includes(term)
+      )
+      .sort((a, b) => b.price - a.price) // ensure price-desc after filter
+  }, [all, q, pos])
 
-    filtered.sort((a, b) => {
-      const prim = sortBy === 'value' ? b.price - a.price : b.form - a.form
-      if (prim !== 0) return prim
-      const sec = b.form - a.form
-      if (sec !== 0) return sec
-      return a.name.localeCompare(b.name)
-    })
-    return filtered
-  }, [pool, q, sortBy])
-
-  function tryAdd(p: Player) {
-    const normalized: Player = { ...p, id: coerceId(p.id) as any }
-    if (selectedCount >= MAX_SQUAD) { alert(`You can only pick ${MAX_SQUAD} players.`); return }
-    if (budget < normalized.price) { alert(`Not enough budget. You have £${budget.toFixed(1)}m, but ${normalized.name} costs £${normalized.price.toFixed(1)}m.`); return }
-    const ok = (addPlayer as any)(normalized)
-    if (ok === false) alert('Could not add player due to squad constraints.')
+  function canAdd(p: Player): { ok: boolean; reason?: string } {
+    if (selected.find(s => s.id === p.id)) return { ok: false, reason: 'Already in squad' }
+    if (selected.length >= TOTAL_SQUAD) return { ok: false, reason: 'Squad is full' }
+    if (budgetLeft - p.price < 0) return { ok: false, reason: 'Insufficient budget' }
+    if (posCount[p.position] >= LIMITS[p.position]) return { ok: false, reason: `Max ${LIMITS[p.position]} ${p.position}` }
+    if ((clubCount[p.team] ?? 0) >= CLUB_CAP) return { ok: false, reason: `Max ${CLUB_CAP} from ${p.team}` }
+    return { ok: true }
   }
 
-  function onRemove(id: Player['id']) {
-    const ok = (removePlayer as any)(coerceId(id))
-    if (ok === false) alert('Could not remove player.')
+  function add(p: Player) {
+    const v = canAdd(p)
+    if (!v.ok) { alert(v.reason); return }
+    setSelected(prev => [...prev, p])
+  }
+  function remove(p: Player) {
+    setSelected(prev => prev.filter(x => x.id !== p.id))
   }
 
-  const canProceed = selectedCount > 0 && selectedCount <= MAX_SQUAD
+  const complete =
+    selected.length === TOTAL_SQUAD &&
+    (['GK', 'DEF', 'MID', 'FWD'] as Position[]).every(k => posCount[k] === LIMITS[k]) &&
+    budgetLeft >= 0
 
   return (
     <div className="screen">
-      <div className="container" style={{ paddingBottom: 110 }}>
-        <TopBar
-          title="Create Your Team • vCT-3"
-          onBack={onBack}
-          rightSlot={<div className="balance-chip">£{budget.toFixed(1)}m</div>}
-        />
-
-        {/* Chips */}
-        <div className="row" style={{ alignItems: 'center', gap: 10, marginTop: 8 }}>
-          <div className="chip">Budget: £{budget.toFixed(1)}m</div>
-          <div className="chip">Selected: {selectedCount}/{MAX_SQUAD}</div>
+      <div className="bg bg-field" />
+      <div className="scrim" />
+      <div className="container">
+        {/* Top bar */}
+        <div className="topbar">
+          <div className="topbar-left">
+            <button className="btn-back" onClick={onBack}>←</button>
+            <div className="topbar-title">Create Team</div>
+          </div>
+          <div className="topbar-right">
+            <span className="balance-chip">{formatMoney(budgetLeft)} left</span>
+          </div>
         </div>
 
-        {/* Search + Sort */}
-        <div className="form-row" style={{ marginTop: 10 }}>
-          <input
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            placeholder="Search players, club, position…"
-            className="input"
+        {/* Budget usage bar */}
+        <div className="progress">
+          <span
+            style={{
+              width: `${Math.min(100, Math.max(0, ((BUDGET_START - budgetLeft) / BUDGET_START) * 100))}%`
+            }}
           />
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value as any)}
-            className="select"
-            style={{ marginLeft: 10 }}
-          >
-            <option value="value">Sort: Value (High→Low)</option>
-            <option value="form">Sort: Form (High→Low)</option>
-          </select>
         </div>
 
-        {loading && <div className="card subtle" style={{ marginTop: 10 }}>Loading players…</div>}
-        {error && <div className="card subtle" style={{ marginTop: 10 }}>{error}</div>}
+        {/* Filters */}
+        <div className="form-row">
+          <select className="select" value={pos} onChange={e => setPos(e.target.value as any)}>
+            <option value="ALL">All</option>
+            <option value="GK">GK</option>
+            <option value="DEF">DEF</option>
+            <option value="MID">MID</option>
+            <option value="FWD">FWD</option>
+          </select>
 
-        {!loading && (
-          <div className="list" style={{ marginTop: 10 }}>
-            {visible.length === 0 && <div className="card subtle">No players match your search.</div>}
+          <div style={{ flex: 1 }} />
+          <div className="chip">GK {posCount.GK}/{LIMITS.GK}</div>
+          <div className="chip">DEF {posCount.DEF}/{LIMITS.DEF}</div>
+          <div className="chip">MID {posCount.MID}/{LIMITS.MID}</div>
+          <div className="chip">FWD {posCount.FWD}/{LIMITS.FWD}</div>
+          <div className="chip">Total {selected.length}/{TOTAL_SQUAD}</div>
+        </div>
 
-            {visible.map(p => {
-              const idKey = coerceId(p.id)
-              const picked = pickedIds.has(idKey)
-              const disableAdd = selectedCount >= MAX_SQUAD || budget < p.price
+        <div className="search-row">
+          <input
+            className="input"
+            placeholder="Search player, club, or position…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
+
+        {/* Loading / Error */}
+        {loading && <div className="card">Loading players…</div>}
+        {err && <div className="card" style={{ borderColor: 'crimson' }}>{err}</div>}
+
+        {/* Player list */}
+        {!loading && !err && (
+          <div className="list">
+            {filtered.map(p => {
+              const already = selected.some(s => s.id === p.id)
+              const verdict = canAdd(p)
+              const disabled = already || !verdict.ok
+              const hint = already ? 'Already selected' : verdict.reason
 
               return (
-                <div key={String(idKey)} className="row card">
-                  <div>
-                    <div style={{ fontWeight: 800 }}>{p.name}</div>
-                    <div className="subtle">
-                      {p.club} • {p.position} • Form {Number(p.form || 0).toFixed(1)}
+                <div key={p.id} className={`card row ${already ? 'pill-you' : ''}`}>
+                  <div className="row" style={{ gap: 14 }}>
+                    <div className="avatar" />
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <strong>{p.name}</strong>
+                      <span className="subtle">{p.team} • {p.position}</span>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div className="price">£{p.price.toFixed(1)}m</div>
-
-                    {picked ? (
-                      <button className="btn-remove" onClick={() => onRemove(idKey as any)}>
-                        Remove
-                      </button>
-                    ) : (
-                      <button
-                        className="btn-add"
-                        disabled={disableAdd}
-                        onClick={() => tryAdd(p)}
-                        title={
-                          selectedCount >= MAX_SQUAD
-                            ? `Max ${MAX_SQUAD} players reached`
-                            : budget < p.price
-                            ? `Need £${(p.price - budget).toFixed(1)}m more`
-                            : ''
-                        }
-                      >
-                        Add
-                      </button>
-                    )}
+                  <div className="row" style={{ gap: 10 }}>
+                    <span className="price">{formatMoney(p.price)}</span>
+                    <button
+                      className={already ? 'btn-remove' : 'btn-add'}
+                      onClick={() => already ? remove(p) : add(p)}
+                      disabled={disabled}
+                      title={hint}
+                    >
+                      {already ? 'Remove' : 'Add'}
+                    </button>
                   </div>
                 </div>
               )
             })}
+            {filtered.length === 0 && <div className="card">No players match your filters.</div>}
           </div>
         )}
 
-        <div className="banner" style={{ marginTop: 16 }}>
-          <div>
-            <div style={{ fontWeight: 900 }}>Finish your squad</div>
-            <div className="subtle">
-              Pick up to {MAX_SQUAD} players within your £100m budget, then enter contests.
-            </div>
-          </div>
-          <button className="cta" disabled={!canProceed} onClick={onNext}>
-            Continue
+        {/* Bottom actions */}
+        <div className="bottom-actions">
+          <button
+            className="cta"
+            onClick={() => complete ? onNext() : alert('Select 15 players with valid position limits and budget.')}
+            disabled={!complete}
+            style={{ opacity: complete ? 1 : 0.6, width: '100%' }}
+          >
+            {complete ? 'Confirm Squad' : 'Select 15 players'}
           </button>
         </div>
-      </div>
 
-      <div className="tabbar">
-        <button className="tab active"><span>Create Team</span></button>
+        <div className="safe-bottom" />
       </div>
     </div>
   )
