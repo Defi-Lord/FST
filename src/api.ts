@@ -20,7 +20,7 @@ async function getFrom(urls: string[]) {
 }
 
 export function fetchBootstrap() {
-  // Try Vercel proxy, then direct FPL upstream
+  // Try your Vercel proxy first; if it fails, hit FPL upstream directly
   return getFrom([
     `${API_BASE}/bootstrap-static`,
     `${UPSTREAM}/bootstrap-static/`

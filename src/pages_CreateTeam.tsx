@@ -1,52 +1,15 @@
-// src/pages_CreateTeam.tsx
 import { useEffect, useMemo, useState } from 'react'
 import { useApp, type Player, Position } from './state'
 import TopBar from './components_TopBar'
+import { fetchBootstrap } from './api'
 
-// ---- Fetch helpers (direct upstream first, then /api, then /public fallback) ----
-const UPSTREAM = 'https://fantasy.premierleague.com/api'
-const API_BASE = '/api/fpl'
-
-async function getJson(url: string) {
-  const r = await fetch(url, { cache: 'no-store' })
-  if (!r.ok) {
-    const t = await r.text().catch(() => '')
-    throw new Error(`HTTP ${r.status} ${r.statusText} :: ${t.slice(0, 160)}`)
-  }
-  return r.json()
-}
-
-async function fetchBootstrapMulti() {
-  // 1) FPL upstream (usually CORS-OK), 2) your Vercel proxy
-  const tries = [`${UPSTREAM}/bootstrap-static/`, `${API_BASE}/bootstrap-static`]
-  let lastErr: any = null
-  for (const u of tries) {
-    try { return await getJson(u) } catch (e) { lastErr = e }
-  }
-  throw lastErr || new Error('All bootstrap attempts failed')
-}
-
-async function fetchFallbackPlayers(): Promise<Player[]> {
-  const r = await fetch('/fallback-players.json', { cache: 'no-store' })
-  const arr = (await r.json()) as any[]
-  return arr.map(p => ({
-    id: String(p.id),
-    name: p.name,
-    club: p.club,
-    position: p.position as Position,
-    price: Number(p.price),
-    form: Number(p.form),
-  }))
-}
-
-// ---- Types from FPL ----
 type FplElement = {
   id: number
   web_name: string
   team: number
   now_cost: number        // tenths of a million (e.g. 96 -> £9.6m)
   element_type: number    // 1 GK, 2 DEF, 3 MID, 4 FWD
-  form: string            // "8.4"
+  form: string
 }
 type FplTeam = { id: number; name: string }
 
@@ -69,7 +32,6 @@ export default function CreateTeam({
   const [error, setError] = useState<string | null>(null)
   const [pool, setPool] = useState<Player[]>([])
 
-  // UI state
   const [q, setQ] = useState('')
   const [sortBy, setSortBy] = useState<'value' | 'form'>('value')
 
@@ -84,13 +46,15 @@ export default function CreateTeam({
   useEffect(() => {
     let mounted = true
     ;(async () => {
-      setLoading(true); setError(null)
       try {
-        // Try upstream then proxy
-        const data = await fetchBootstrapMulti()
+        setLoading(true)
+        setError(null)
+
+        const data = await fetchBootstrap()
         const teams: FplTeam[] = data?.teams ?? []
         const elements: FplElement[] = data?.elements ?? []
         const teamNameById = new Map(teams.map(t => [t.id, t.name]))
+
         const mapped: Player[] = elements.map(e => ({
           id: coerceId(e.id) as any,
           name: e.web_name,
@@ -99,19 +63,30 @@ export default function CreateTeam({
           price: Number((e.now_cost || 0) / 10),
           form: Number(parseFloat(e.form || '0')),
         }))
+
         if (!mounted) return
         setPool(mapped)
       } catch (err: any) {
-        // Use public fallback so page remains functional
+        console.error('FPL bootstrap fetch failed:', err)
+        if (!mounted) return
+        setError('Couldn’t load real FPL players. Showing fallback list — real FPL fetch failed. Check your /api setup.')
+
+        // public fallback
         try {
-          const mapped = await fetchFallbackPlayers()
-          if (!mounted) return
+          const r = await fetch('/fallback-players.json', { cache: 'no-store' })
+          const arr = (await r.json()) as any[]
+          const mapped: Player[] = arr.map(p => ({
+            id: coerceId(p.id) as any,
+            name: p.name,
+            club: p.club,
+            position: p.position as Position,
+            price: Number(p.price),
+            form: Number(p.form),
+          }))
           setPool(mapped)
-          setError('Couldn’t load real FPL players. Showing fallback list.')
         } catch (e) {
-          if (!mounted) return
+          console.error('Fallback list fetch failed:', e)
           setPool([])
-          setError('Couldn’t load players (FPL + fallback both failed).')
         }
       } finally {
         if (mounted) setLoading(false)
@@ -123,7 +98,6 @@ export default function CreateTeam({
   const pickedIds = useMemo(() => new Set(team.map(p => coerceId(p.id))), [team, storeIdType])
   const selectedCount = team.length
 
-  // Filter + sort (Value high→low, tiebreak by Form, then name)
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase()
     const filtered = needle
@@ -163,7 +137,7 @@ export default function CreateTeam({
     <div className="screen">
       <div className="container" style={{ paddingBottom: 110 }}>
         <TopBar
-          title="Create Your Team"
+          title="Create Your Team • vCT-3"
           onBack={onBack}
           rightSlot={<div className="balance-chip">£{budget.toFixed(1)}m</div>}
         />
