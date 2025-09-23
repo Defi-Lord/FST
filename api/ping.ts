@@ -1,4 +1,3 @@
-// api/ping.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 export const config = { runtime: 'nodejs18.x' }
 export default function handler(_req: VercelRequest, res: VercelResponse) {
