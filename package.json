@@ -1,5 +1,5 @@
 ﻿{
-  "name": "fst",
+  "name": "fst",  "description": "FPL-style Telegram mini app built with Vite + React",
   "version": "1.0.0",
   "private": true,
   "type": "module",
