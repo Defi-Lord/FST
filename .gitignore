@@ -1,20 +1,4 @@
-# dependencies
 node_modules/
-
-# builds
 dist/
-build/
-
-# logs
-npm-debug.log*
-yarn-*.log*
-pnpm-debug.log*
-
-# editor/system
-.DS_Store
 .vscode/
-.idea/
-
-# env
 .env
-.env.*
