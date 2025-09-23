@@ -3,7 +3,7 @@ import { AppProvider } from './state'
 
 import Landing from './pages_Landing'
 import Rewards from './pages_Rewards'
-// import CreateTeam from './pages_CreateTeam' // no longer needed because createTeam renders ViewTeam
+import CreateTeam from './pages_CreateTeam'
 import ViewTeam from './pages_ViewTeam'
 import JoinContest from './pages_JoinContest'
 import Leaderboard from './pages_Leaderboard'
@@ -32,7 +32,7 @@ export default function App(){
         <HomeHub
           onBack={go('landing')}
           onViewTeam={go('viewTeam')}
-          onCreateTeam={go('viewTeam')}   // Create Team now opens View Team
+          onCreateTeam={go('createTeam')}
           onJoinContest={go('joinContest')}
           onLeaderboard={go('leaderboard')}
           onTransfers={() => alert('Transfers coming soon')}
@@ -41,8 +41,7 @@ export default function App(){
         />
       )}
 
-      {/* Make the createTeam route render the same UI as viewTeam */}
-      {route === 'createTeam' && <ViewTeam onBack={go('home')} />}
+      {route === 'createTeam' && <CreateTeam onNext={go('home')} onBack={go('home')} />}
 
       {route === 'viewTeam' && <ViewTeam onBack={go('home')} />}
 
