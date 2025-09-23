@@ -1,7 +1,7 @@
+// src/api.ts
 const API_BASE = '/api/fpl'
 const UPSTREAM = 'https://fantasy.premierleague.com/api'
 
-// Try multiple URLs in order and return the first that succeeds
 async function getFrom(urls: string[]) {
   let lastErr: any = null
   for (const url of urls) {
@@ -20,6 +20,7 @@ async function getFrom(urls: string[]) {
 }
 
 export function fetchBootstrap() {
+  // Try Vercel proxy, then direct FPL upstream
   return getFrom([
     `${API_BASE}/bootstrap-static`,
     `${UPSTREAM}/bootstrap-static/`
