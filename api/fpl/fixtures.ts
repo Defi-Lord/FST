@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-
 export const config = { runtime: 'nodejs18.x' }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -9,13 +8,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const r = await fetch(upstream, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Referer': 'https://fantasy.premierleague.com/'
       },
       cache: 'no-store'
     })
     const text = await r.text()
-    res
-      .status(r.status)
+    res.status(r.status)
       .setHeader('Content-Type', 'application/json')
       .setHeader('Access-Control-Allow-Origin', '*')
       .setHeader('Cache-Control', 'public, max-age=300')
